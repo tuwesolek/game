@@ -1,0 +1,14 @@
+[gd_scene load_steps=4 format=3 uid="uid://b0xqn8vgm5kxr"]
+
+[ext_resource type="Script" path="res://scripts/GameManager.gd" id="1_qxhgk"]
+[ext_resource type="PackedScene" uid="uid://c7xqn8vgm5kxr" path="res://ui/GameUI.tscn" id="2_7xhgk"]
+[ext_resource type="PackedScene" uid="uid://d8xqn8vgm5kxr" path="res://scenes/GameWorld.tscn" id="3_8xhgk"]
+
+[node name="Main" type="Node2D"]
+script = ExtResource("1_qxhgk")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="GameUI" parent="CanvasLayer" instance=ExtResource("2_7xhgk")]
+
+[node name="GameWorld" parent="." instance=ExtResource("3_8xhgk")]
