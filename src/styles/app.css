@@ -1,0 +1,264 @@
+/* Pixel Dominion global styles */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --game-bg: #1a1a1a;
+  --game-panel: #2d2d2d;
+  --game-accent: #4f46e5;
+  --territory-gray: #6b7280;
+  --building-primary: #3b82f6;
+  --px-color: #fbbf24;
+  --exp-color: #10b981;
+  --apx-color: #ef4444;
+}
+
+/* Base styles */
+html {
+  font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  background-color: var(--game-bg);
+  color: #e5e7eb;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Full-screen game */
+  user-select: none; /* Prevent text selection during pixel drawing */
+}
+
+/* Custom scrollbars for dark theme */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #374151;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #6b7280;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+/* Game-specific components */
+@layer components {
+  .game-panel {
+    @apply bg-game-panel border border-gray-600 rounded-lg;
+  }
+
+  .game-button {
+    @apply bg-gray-700 hover:bg-gray-600 text-white font-mono text-sm px-3 py-2 rounded-md transition-colors duration-150 border border-gray-600;
+    min-height: 44px; /* Touch target size */
+    min-width: 44px;
+  }
+
+  .game-button:disabled {
+    @apply opacity-50 cursor-not-allowed hover:bg-gray-700;
+  }
+
+  .game-button.active {
+    @apply bg-game-accent border-blue-400 text-white;
+  }
+
+  .resource-display {
+    @apply font-mono text-sm font-medium px-2 py-1 rounded-md border;
+  }
+
+  .px-display {
+    @apply resource-display bg-yellow-900/30 border-yellow-700 text-yellow-300;
+  }
+
+  .exp-display {
+    @apply resource-display bg-green-900/30 border-green-700 text-green-300;
+  }
+
+  .apx-display {
+    @apply resource-display bg-red-900/30 border-red-700 text-red-300;
+  }
+
+  .cooldown-display {
+    @apply text-xs text-gray-400 font-mono;
+  }
+
+  .color-swatch {
+    @apply w-8 h-8 rounded border-2 border-gray-600 cursor-pointer transition-all duration-150 hover:scale-110;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .color-swatch.selected {
+    @apply border-white scale-110 shadow-lg;
+  }
+
+  .building-card {
+    @apply game-panel p-3 cursor-pointer transition-all duration-200 hover:border-gray-500;
+  }
+
+  .building-card.available {
+    @apply hover:bg-gray-600/50;
+  }
+
+  .building-card.unavailable {
+    @apply opacity-50 cursor-not-allowed;
+  }
+
+  .building-card.selected {
+    @apply border-game-accent bg-blue-900/20;
+  }
+
+  .leaderboard-entry {
+    @apply flex items-center justify-between p-2 border-b border-gray-700 last:border-b-0;
+  }
+
+  .toast {
+    @apply fixed bottom-4 right-4 game-panel p-4 rounded-lg shadow-lg z-50 max-w-sm;
+    animation: toast-slide-in 0.3s ease-out;
+  }
+
+  .toast.success {
+    @apply border-green-600 bg-green-900/20;
+  }
+
+  .toast.error {
+    @apply border-red-600 bg-red-900/20;
+  }
+
+  .toast.warning {
+    @apply border-yellow-600 bg-yellow-900/20;
+  }
+
+  .modal-overlay {
+    @apply fixed inset-0 bg-black/80 z-40 flex items-center justify-center;
+  }
+
+  .modal-content {
+    @apply game-panel p-6 max-w-lg max-h-[80vh] overflow-y-auto;
+  }
+}
+
+/* Animations */
+@keyframes toast-slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-ping {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.pulse-ping {
+  animation: pulse-ping 1s ease-in-out infinite;
+}
+
+/* MapLibre GL overrides for dark theme */
+.maplibregl-map {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.maplibregl-popup {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.maplibregl-popup-content {
+  background: var(--game-panel);
+  color: #e5e7eb;
+  border: 1px solid #6b7280;
+  border-radius: 8px;
+}
+
+.maplibregl-popup-close-button {
+  color: #e5e7eb;
+  font-size: 18px;
+}
+
+.maplibregl-ctrl {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.maplibregl-ctrl-group button {
+  background-color: var(--game-panel);
+  color: #e5e7eb;
+}
+
+.maplibregl-ctrl-group button:hover {
+  background-color: #374151;
+}
+
+/* Touch and mobile optimizations */
+@media (max-width: 768px) {
+  .game-button {
+    @apply px-4 py-3 text-base;
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  .color-swatch {
+    @apply w-10 h-10;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .resource-display {
+    @apply text-base px-3 py-2;
+  }
+
+  .building-card {
+    @apply p-4;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus styles for keyboard navigation */
+.game-button:focus,
+.color-swatch:focus,
+.building-card:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2 ring-offset-gray-900;
+}
+
+/* Print styles (minimal for PWA) */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+  
+  .game-panel {
+    border: 1px solid black;
+    background: white;
+  }
+}

@@ -1,0 +1,17 @@
+{
+	"/": [],
+	"/api/leaderboard": [
+		"src/routes/api/leaderboard/+server.ts"
+	],
+	"/api/place": [
+		"src/routes/api/place/+server.ts"
+	],
+	"/map-test": [],
+	"/test-map": [],
+	"/test-osm": [],
+	"/test": [],
+	"/verify-map": [],
+	"/ws": [
+		"src/routes/ws/+server.ts"
+	]
+}
