@@ -192,6 +192,13 @@ export class GameWSServer {
 			data: update,
 			timestamp: Date.now()
 		});
+		
+		// Also broadcast to all connected clients for simplicity in development
+		this.broadcastToAllClients({
+			type: 'pixel_update',
+			data: update,
+			timestamp: Date.now()
+		});
 	}
 
 	private handleBuildingPlacement(ws: WebSocket, message: any): void {

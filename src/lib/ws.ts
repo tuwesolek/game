@@ -5,7 +5,12 @@ import { writable, get } from 'svelte/store';
 import { worldState, gameActions, player } from './store';
 import type { Tile, Building, PixelUpdateMessage, BuildingPlacementMessage } from './types';
 
-const WS_URL = import.meta.env.VITE_WEBSOCKET_URL || (typeof window !== 'undefined' ? `ws://${window.location.hostname}:8080` : 'ws://localhost:8080');
+const WS_URL = import.meta.env.VITE_WEBSOCKET_URL || 
+  (typeof window !== 'undefined' ? 
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 
+      'ws://localhost:8080' : 
+      `ws://${window.location.hostname}:8080` 
+    : 'ws://localhost:8080');
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
@@ -55,7 +60,7 @@ class WebSocketClient {
         worldState.set(message.payload);
         break;
       case 'pixel_update':
-        const pixelUpdate: PixelUpdateMessage = message.payload;
+        const pixelUpdate: PixelUpdateMessage = message.data;
         gameActions.updateTile(pixelUpdate.tile_id, {
           color: pixelUpdate.color,
           opacity: pixelUpdate.opacity,
@@ -63,18 +68,21 @@ class WebSocketClient {
         this.pixelUpdateCallbacks.forEach(callback => callback(pixelUpdate));
         break;
       case 'building_placed':
-        const building: Building = message.payload;
+        const building: Building = message.data;
         gameActions.addBuilding(building.owner_id, building);
         this.buildingPlacedCallbacks.forEach(callback => callback(building));
         break;
       case 'player_update':
-        gameActions.updateResources(message.payload.playerId, message.payload.resources);
+        gameActions.updateResources(message.data.playerId, message.data.resources);
+        break;
+      case 'system_message':
+        console.log('System message:', message.data.message);
         break;
       case 'error':
-        console.error('Server error:', message.payload);
+        console.error('Server error:', message.data);
         break;
       default:
-        console.warn('Unknown message type:', message.type, message.payload);
+        console.warn('Unknown message type:', message.type, message.data);
     }
   }
 
@@ -89,7 +97,10 @@ class WebSocketClient {
   public sendPixelUpdate(tile_id: string, color: string, opacity: number) {
     this.send({
       type: 'pixel_update',
-      payload: { tile_id, color, opacity },
+      tile_id,
+      color,
+      opacity,
+      owner_id: get(player)?.id || 'dev-player'
     });
   }
 

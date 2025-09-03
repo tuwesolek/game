@@ -35,6 +35,7 @@
   // Painting state
   let isPainting = false;
   let isPanniing = false;
+  let isSpacePainting = false; // New: track spacebar painting
   let lastPaintedTile = null;
   let currentHoverTile = null;
   
@@ -97,6 +98,10 @@
     container.addEventListener('pointerup', handlePointerUp);
     container.addEventListener('pointerleave', handlePointerLeave);
     container.addEventListener('wheel', handleWheel);
+    
+    // Add keyboard event listeners
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
   }
 
   function handlePointerDown(event) {
@@ -128,7 +133,8 @@
       return;
     }
 
-    if (isPainting && $uiState.selected_tool === 'territory') {
+    // Paint with either mouse or spacebar
+    if ((isPainting || isSpacePainting) && $uiState.selected_tool === 'territory') {
       const currentTileId = tileId(tileCoord);
       if (lastPaintedTile !== currentTileId) {
         paintPixel(tileCoord, $uiState.selected_color);
@@ -146,8 +152,31 @@
   function handlePointerLeave() {
     isPainting = false;
     isPanniing = false;
+    isSpacePainting = false; // Also stop space painting
     lastPaintedTile = null;
     currentHoverTile = null;
+  }
+
+  // New: Handle keyboard events
+  function handleKeyDown(event) {
+    // Spacebar for painting
+    if (event.code === 'Space' && !isSpacePainting) {
+      event.preventDefault(); // Prevent space from scrolling page
+      isSpacePainting = true;
+      // Paint the current hovered tile if there is one
+      if (currentHoverTile && $uiState.selected_tool === 'territory') {
+        paintPixel(currentHoverTile, $uiState.selected_color);
+        lastPaintedTile = tileId(currentHoverTile);
+      }
+    }
+  }
+
+  function handleKeyUp(event) {
+    // Release spacebar
+    if (event.code === 'Space') {
+      isSpacePainting = false;
+      lastPaintedTile = null;
+    }
   }
 
   function handleWheel(event) {
