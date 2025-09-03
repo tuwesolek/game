@@ -2,6 +2,7 @@
 
 import type { StyleSpecification, TransformRequestFunction } from 'maplibre-gl';
 import { COLORS } from '../game/constants.js';
+import style from '../../../config/maplibre-style.json';
 
 // CDN pass-through for OpenFreeMap tiles with caching optimization
 export const transformRequest: TransformRequestFunction = (url: string, resourceType: string) => {
@@ -17,144 +18,8 @@ export const transformRequest: TransformRequestFunction = (url: string, resource
 	return { url };
 };
 
-// Custom style optimized for dark theme pixel art gameplay
-export const gameMapStyle: StyleSpecification = {
-	version: 8,
-	name: 'Pixel Dominion - Game Optimized',
-	metadata: {
-		'mapbox:autocomposite': false,
-		'mapbox:type': 'template',
-		'pixel-dominion:version': '1.0'
-	},
-	glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
-	sprite: 'https://tiles.openfreemap.org/styles/bright/sprite',
-	sources: {
-		openmaptiles: {
-			type: 'vector',
-			url: 'https://tiles.openfreemap.org/planet',
-			// Support detailed pixel art editing at high zoom
-			maxzoom: 20,
-			attribution: '© OpenFreeMap contributors'
-		}
-	},
-	layers: [
-		// Dark base optimized for pixel overlay visibility
-		{
-			id: 'background',
-			type: 'background',
-			paint: {
-				'background-color': '#0f0f0f'
-			}
-		},
-		// Minimal landuse for context without distraction
-		{
-			id: 'landuse',
-			type: 'fill',
-			source: 'openmaptiles',
-			'source-layer': 'landuse',
-			maxzoom: 12, // Hide at high zoom to emphasize pixels
-			paint: {
-				'fill-color': [
-					'match',
-					['get', 'class'],
-					'park', '#1a3d1a',
-					'residential', '#1a1a1a',
-					'commercial', '#2a1a1a',
-					'industrial', '#3a2a2a',
-					'#1a1a1a'
-				],
-				'fill-opacity': 0.4
-			}
-		},
-		// Water bodies for geographic context
-		{
-			id: 'water',
-			type: 'fill',
-			source: 'openmaptiles',
-			'source-layer': 'water',
-			paint: {
-				'fill-color': '#1e3a8a',
-				'fill-opacity': 0.6
-			}
-		},
-		// Minimal road network for reference
-		{
-			id: 'roads-major',
-			type: 'line',
-			source: 'openmaptiles',
-			'source-layer': 'transportation',
-			filter: ['in', 'class', 'primary', 'trunk', 'motorway'],
-			maxzoom: 14,
-			paint: {
-				'line-color': '#374151',
-				'line-width': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					6, 0.5,
-					10, 1,
-					14, 2
-				],
-				'line-opacity': 0.3
-			}
-		},
-		// Country/state boundaries for strategic context
-		{
-			id: 'boundaries',
-			type: 'line',
-			source: 'openmaptiles',
-			'source-layer': 'boundary',
-			filter: ['<=', 'admin_level', 4],
-			paint: {
-				'line-color': '#6b7280',
-				'line-width': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					4, 0.5,
-					8, 1,
-					12, 2
-				],
-				'line-opacity': 0.4,
-				'line-dasharray': [2, 2]
-			}
-		},
-		// City labels for orientation (fade at high zoom)
-		{
-			id: 'place-labels',
-			type: 'symbol',
-			source: 'openmaptiles',
-			'source-layer': 'place',
-			filter: ['in', 'class', 'city', 'town'],
-			maxzoom: 12,
-			layout: {
-				'text-field': '{name}',
-				'text-font': ['Open Sans Regular'],
-				'text-size': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					4, 10,
-					8, 12,
-					12, 14
-				],
-				'text-anchor': 'center'
-			},
-			paint: {
-				'text-color': '#9ca3af',
-				'text-halo-color': '#111827',
-				'text-halo-width': 1,
-				'text-opacity': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					10, 0.8,
-					12, 0.2
-				]
-			}
-		}
-	]
-};
+// Use the imported style and cast it to StyleSpecification
+export const gameMapStyle: StyleSpecification = style as StyleSpecification;
 
 // Pixel overlay layer configuration
 export const pixelLayerConfig = {

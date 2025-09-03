@@ -1,5 +1,8 @@
 <script>
   import '../styles/app.css';
+  
+  // SvelteKit passes this prop
+  export let params = {};
 </script>
 
 <main class="h-screen w-screen overflow-hidden bg-game-bg text-gray-100">

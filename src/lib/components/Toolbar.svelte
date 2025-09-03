@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
   import { uiState, gameActions, player, availableColors } from '$lib/store.ts';
   import { getBuildingsUnlockedBy, getAvailableBuildings, getBuildingDisplayInfo, getBuildingTemplate } from '$lib/game/buildings.ts';
 

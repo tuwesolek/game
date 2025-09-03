@@ -96,7 +96,7 @@ docker run -p 3000:3000 pixel-dominion
 
 # Environment variables
 PUBLIC_TILE_STYLE_URL=https://tiles.openfreemap.org/styles/bright
-PUBLIC_WS_URL=ws://localhost:5173/ws
+PUBLIC_WS_URL=ws://37.60.229.209/ws
 PUBLIC_COOLDOWN_SECONDS=30
 ```
 

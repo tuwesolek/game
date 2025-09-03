@@ -3,6 +3,8 @@
   import Toolbar from '$lib/components/Toolbar.svelte';
   import Modals from '$lib/components/Modals.svelte';
   
+  // SvelteKit passes this prop
+  export let params = {};
 </script>
 
 <div class="h-screen w-screen overflow-hidden bg-game-bg flex">

@@ -2,11 +2,9 @@
 
 > Real-time pixel-based RTS inspired by r/place mechanics
 
-A production-ready first playable of Pixel Dominion, featuring territory control, building mechanics, and real-time multiplayer gameplay on an interactive world map.
+A production-ready first playable of Pixel Dominion, featuring territory control, building mechanics, and real-time multiplayer gameplay on an interactive pixel art canvas.
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/pixel-dominion/game)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![PWA Ready](https://img.shields.io/badge/PWA-ready-purple)](static/manifest.webmanifest)
+[![Build Status](https://img.shields.io/badge/build-passing-brightgreen)](https://github.com/pixel-dominion/game) [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE) [![PWA Ready](https://img.shields.io/badge/PWA-ready-purple)](static/manifest.webmanifest)
 
 ## 🚀 Quick Start
 
@@ -53,7 +51,7 @@ Control 25% of the world map or eliminate all opponents through strategic territ
 
 ### Tech Stack
 - **Frontend**: SvelteKit + TypeScript + TailwindCSS
-- **Map Engine**: MapLibre GL JS + OpenFreeMap vector tiles
+- **Canvas Rendering**: HTML5 Canvas for pixel grid
 - **Real-time**: WebSocket with reconnection & backoff
 - **State**: Svelte stores with reactive patterns
 - **Validation**: Zod schemas for API contracts
@@ -69,8 +67,7 @@ src/
 │   │   ├── rules.ts        # Validation & anti-grief
 │   │   └── constants.ts    # Game balance config
 │   ├── map/            # Spatial systems
-│   │   ├── grid.ts         # Coordinate transformation
-│   │   └── theme.ts        # MapLibre customization
+│   │   └── grid.ts         # Tile coordinate system
 │   ├── components/     # Svelte UI components
 │   ├── store.ts        # State management
 │   ├── api.ts          # Client API with validation
@@ -81,6 +78,48 @@ src/
 │   └── +page.svelte    # Main game interface
 └── styles/app.css      # Global styling
 ```
+
+## Frontend Architecture: Pixel Canvas
+
+### Overview
+The application now features a collaborative pixel art canvas, similar to wplace.live. It's a grid-based system where users can "paint" pixels on a shared digital space. The previous geographic map background has been replaced with this pixel-art-focused interface.
+
+### Key Components
+- **`src/lib/components/Map.svelte`**: This is the central Svelte component responsible for rendering and interacting with the pixel grid. It utilizes three HTML5 Canvas elements:
+    - `pixelCanvas`: Draws the actual colored pixels based on the `worldState`.
+    - `gridCanvas`: Renders a grid overlay, visible at higher zoom levels, to delineate individual pixels.
+    - `cursorCanvas`: Displays a real-time cursor preview, showing the currently hovered tile and the selected painting color.
+  This component also handles all user input for panning, zooming, and painting, translating screen coordinates into logical tile coordinates.
+
+- **`src/lib/map/grid.ts`**: This file provides a simplified, non-geographic tile coordinate system. Its functions are designed for managing a grid of abstract tiles, including:
+    - `tileId(coord)`: Generates a unique string identifier for a given tile coordinate (e.g., "lat_idx_lon_idx").
+    - `parseTileId(id)`: Converts a tile ID string back into its `TileCoord` object.
+    - `tileDistance(a, b)`: Calculates the Euclidean distance between two tile coordinates.
+    - `getAdjacentTiles(coord)`: Returns an array of the 8 tiles immediately surrounding a given tile.
+    - `getTileArea(center, width, height)`: Returns all tile coordinates within a specified rectangular area around a center tile.
+    - `getShardId(coord)`: Determines the shard ID for a tile, used for efficient data management.
+    - `isAreaClear(...)`: Utility for checking if a given area of tiles is unoccupied.
+  Crucially, this module no longer contains any functions for converting between geographic coordinates (latitude/longitude) and tile coordinates, as the map is no longer tied to real-world geography.
+
+- **`src/lib/store.ts`**: This Svelte store manages the global application state. Key parts relevant to the pixel canvas include:
+    - `worldState`: A writable store containing the game world data, most notably `worldState.tiles`, which is a `Map<TileId, Tile>` storing the color and other properties of each pixel on the canvas.
+    - `uiState`: A writable store for UI-specific states, such as the currently `selected_tool` (e.g., 'territory' for painting), `selected_color`, and the current `zoom_level`.
+
+- **`src/lib/ws.ts`**: This module handles real-time communication with the backend server using WebSockets. It is responsible for:
+    - Sending `pixel_update` messages to the server whenever a user paints a pixel, informing the backend of the `tile_id`, `color`, and `opacity`.
+    - Receiving `world_state` updates and individual `pixel_update` messages from the server, which then trigger updates to the local `worldState` store, ensuring all clients see the same canvas state.
+
+### Interaction Flow
+1.  **User Input**: Mouse clicks, drags, and wheel scrolls on the canvas are captured by `Map.svelte`.
+2.  **Coordinate Translation**: `Map.svelte` translates the screen coordinates of user input into logical tile coordinates (lat_idx, lon_idx) based on the current pan and zoom levels.
+3.  **Painting**: When a user paints a pixel (e.g., by clicking or dragging in 'territory' mode):
+    -   `Map.svelte` immediately updates the local `worldState` via `gameActions.updateTile` for instant visual feedback.
+    -   A `pixel_update` message is sent via WebSocket (`ws.sendPixelUpdate`) to the backend server, notifying it of the change.
+4.  **Rendering Loop**: A `requestAnimationFrame` loop in `Map.svelte` continuously redraws the canvas:
+    -   The `pixelCanvas` is drawn by iterating over the `worldState.tiles` data and rendering each tile with its assigned color and opacity, applying the current pan and zoom transformations.
+    -   The `gridCanvas` is drawn to show pixel boundaries when zoomed in sufficiently.
+    -   The `cursorCanvas` provides a visual indicator of the currently hovered tile and the selected color.
+5.  **Panning and Zooming**: These actions are implemented by dynamically adjusting `panX`, `panY`, and `zoom` variables within `Map.svelte`. These values are then used to transform the drawing context of all three canvases, creating the visual effect of moving and scaling the pixel art canvas.
 
 ## 🎮 Gameplay Features
 
@@ -122,7 +161,7 @@ src/
 # Environment variables (.env)
 PUBLIC_TILE_STYLE_URL=https://tiles.openfreemap.org/styles/bright
 PUBLIC_TILE_API_URL=https://tiles.openfreemap.org
-PUBLIC_WS_URL=ws://localhost:5173/ws
+PUBLIC_WS_URL=ws://37.60.229.209/ws
 PUBLIC_COOLDOWN_SECONDS=30
 ```
 
@@ -221,11 +260,9 @@ Pixel Dominion is installable as a PWA with:
 
 ## 🗺️ Map Controls
 
-- **Click**: Place pixel or building
-- **Right-click**: Quick APX attack
-- **Drag**: Pan map view
-- **Scroll**: Zoom in/out
-- **Double-click**: Zoom to location
+- **Click**: Paint pixel or place building
+- **Drag**: Pan pixel canvas
+- **Scroll**: Zoom pixel canvas
 
 ## 🔧 Known Limitations & Roadmap
 
@@ -302,12 +339,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 - **Fonts**: JetBrains Mono (OFL License)
 - **Icons**: Custom pixel art + emoji
 
-### Third-Party Libraries
-- MapLibre GL JS (BSD-3-Clause)
-- SvelteKit (MIT)
-- TailwindCSS (MIT)
-- Zod (MIT)
-
 ## 📞 Support & Community
 
 - **Issues**: [GitHub Issues](https://github.com/anthropics/claude-code/issues)
@@ -317,6 +348,6 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 ---
 
-Built with ❤️ using SvelteKit, MapLibre GL JS, and modern web technologies.
+Built with ❤️ using SvelteKit, and modern web technologies.
 
 *This is a first playable demonstration. Full production deployment requires additional server infrastructure and database integration.*

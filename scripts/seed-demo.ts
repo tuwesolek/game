@@ -151,7 +151,7 @@ async function main() {
     console.log('🎉 Demo seeding completed successfully!');
     console.log('\nTo start the game:');
     console.log('  npm run dev');
-    console.log('  Open http://localhost:5173\n');
+    console.log('  Open http://37.60.229.209\n');
     
     // Export demo data
     const demoData = {

@@ -1,654 +1,290 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import maplibregl from 'maplibre-gl';
-  const { Map: MapLibre, Popup } = maplibregl;
-  import { gameMapStyle, transformRequest, mapInteractionConfig } from '$lib/map/theme.ts';
   import { uiState, gameActions, worldState } from '$lib/store.ts';
-  import { geoToTile, snapToGrid, getShardsInBounds, tileToGeo, getTilesInBounds } from '$lib/map/grid.ts';
   import { getWebSocket } from '$lib/ws.ts';
-  import 'maplibre-gl/dist/maplibre-gl.css';
+  import { tileId, parseTileId } from '$lib/map/grid.ts';
 
-  let mapContainer;
-  let map;
-  let ws;
-  
-  // Initialize WebSocket with error handling
-  try {
-    ws = getWebSocket();
-  } catch (error) {
-    console.warn('WebSocket initialization failed:', error);
-    // Create a mock WebSocket object so map doesn't crash
-    ws = {
-      subscribeTiles: () => {},
-      sendPixelUpdate: () => {},
-      sendBuildingPlacement: () => {},
-      onPixelUpdate: () => () => {},
-      onBuildingPlaced: () => () => {},
-      send: () => {}
-    };
-  }
-  
-  // Canvas overlays for pixel-perfect rendering
+  let container;
   let pixelCanvas;
   let pixelContext;
   let gridCanvas;
   let gridContext;
   let cursorCanvas;
   let cursorContext;
-  
-  // Pixel painting state
-  let isPainting = false;
-  let lastPaintedTile = null;
-  let currentHoverTile = null;
-  let pixelSize = 16; // Base pixel size that scales with zoom
-  
-  // Map loading state
-  let mapLoaded = false;
-  let mapError = null;
 
-  onMount(() => {
-    console.log('Map component mounting...');
-    try {
-      initializeMap();
-      setupPixelOverlay();  
-      setupEventHandlers();
-      startRenderLoop();
-    } catch (error) {
-      console.error('Error in onMount:', error);
-      mapError = 'Component initialization failed: ' + error.message;
-    }
-  });
-
-  onDestroy(() => {
-    if (map) {
-      map.remove();
-    }
-  });
-
-  function initializeMap() {
-    try {
-      console.log('Initializing map...');
-      console.log('MapContainer:', mapContainer);
-      console.log('MapLibre available:', typeof MapLibre);
-      
-      if (!mapContainer) {
-        throw new Error('Map container not found');
-      }
-
-      const mapOptions = {
-        container: mapContainer,
-        style: gameMapStyle,
-        center: [0, 20], // Start near equator for better world coverage
-        zoom: 8,
-        transformRequest,
-        ...mapInteractionConfig
-      };
-
-      console.log('Creating MapLibre instance with options:', mapOptions);
-      map = new MapLibre(mapOptions);
-      console.log('MapLibre instance created:', map);
-
-      map.on('load', () => {
-        console.log('Map loaded successfully');
-        mapLoaded = true;
-        try {
-          setupCanvasSource();
-          resizeCanvases(); // Ensure canvases are properly sized
-          redrawOverlays(); // Draw initial overlays
-        } catch (error) {
-          console.error('Error setting up map overlays:', error);
-          mapError = 'Failed to setup overlays: ' + error.message;
-        }
-      });
-
-      map.on('moveend', handleViewportChange);
-      map.on('zoomend', handleViewportChange);
-      map.on('click', handleMapClick);
-      map.on('contextmenu', handleRightClick);
-      
-      map.on('error', (error) => {
-        console.error('Map error:', error);
-        mapError = 'Map loading error: ' + (error.error?.message || 'Unknown error');
-      });
-      
-    } catch (error) {
-      console.error('Failed to initialize map:', error);
-      mapError = 'Initialization failed: ' + error.message;
-    }
+  let ws;
+  try {
+    ws = getWebSocket();
+  } catch (error) {
+    console.warn('WebSocket initialization failed:', error);
+    ws = {
+      subscribeTiles: () => {},
+      sendPixelUpdate: () => {},
+      onPixelUpdate: () => () => {},
+    };
   }
 
-  function setupPixelOverlay() {
-    // Create canvas elements for pixel-perfect overlays
+  // Viewport state
+  let panX = 0;
+  let panY = 0;
+  let zoom = 1;
+  const MIN_ZOOM = 0.1;
+  const MAX_ZOOM = 20;
+  const TILE_SIZE = 16;
+
+  // Painting state
+  let isPainting = false;
+  let isPanniing = false;
+  let lastPaintedTile = null;
+  let currentHoverTile = null;
+  
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  onMount(() => {
+    setupCanvases();
+    setupEventHandlers();
+    requestAnimationFrame(renderFrame);
+
+    // Center the initial view
+    panX = -container.clientWidth / 2;
+    panY = -container.clientHeight / 2;
+
+    // Mock world data for testing
+    for (let i = -10; i < 10; i++) {
+      for (let j = -10; j < 10; j++) {
+        const id = tileId({ lat_idx: i, lon_idx: j });
+        const color = (i + j) % 2 === 0 ? '#222' : '#333';
+        gameActions.updateTile(id, { lat_idx: i, lon_idx: j, type: 'territory', color, opacity: 1.0 });
+      }
+    }
+  });
+
+  function setupCanvases() {
     pixelCanvas = document.createElement('canvas');
-    pixelCanvas.style.position = 'absolute';
-    pixelCanvas.style.top = '0';
-    pixelCanvas.style.left = '0';
-    pixelCanvas.style.pointerEvents = 'none';
-    pixelCanvas.style.zIndex = '12';
-    
     gridCanvas = document.createElement('canvas');
-    gridCanvas.style.position = 'absolute';
-    gridCanvas.style.top = '0';
-    gridCanvas.style.left = '0';
-    gridCanvas.style.pointerEvents = 'none';
-    gridCanvas.style.zIndex = '11';
-    
     cursorCanvas = document.createElement('canvas');
-    cursorCanvas.style.position = 'absolute';
-    cursorCanvas.style.top = '0';
-    cursorCanvas.style.left = '0';
-    cursorCanvas.style.pointerEvents = 'none';
-    cursorCanvas.style.zIndex = '13';
-    cursorCanvas.style.cursor = 'none';
-    
-    mapContainer.appendChild(gridCanvas);
-    mapContainer.appendChild(pixelCanvas);
-    mapContainer.appendChild(cursorCanvas);
-    
+
+    container.appendChild(pixelCanvas);
+    container.appendChild(gridCanvas);
+    container.appendChild(cursorCanvas);
+
     pixelContext = pixelCanvas.getContext('2d');
     gridContext = gridCanvas.getContext('2d');
     cursorContext = cursorCanvas.getContext('2d');
+
+    resizeCanvases();
+  }
+
+  function resizeCanvases() {
+    const rect = container.getBoundingClientRect();
+    [pixelCanvas, gridCanvas, cursorCanvas].forEach(canvas => {
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      canvas.style.position = 'absolute';
+      canvas.style.top = '0';
+      canvas.style.left = '0';
+    });
     
-    // Disable image smoothing for crisp pixels
     pixelContext.imageSmoothingEnabled = false;
     gridContext.imageSmoothingEnabled = false;
     cursorContext.imageSmoothingEnabled = false;
   }
 
-  function setupCanvasSource() {
-    // Add canvas source for pixel overlay
-    map.addSource('pixel-overlay', {
-      type: 'canvas',
-      canvas: pixelCanvas,
-      coordinates: [
-        [-180, 85.051129],
-        [180, 85.051129],
-        [180, -85.051129],
-        [-180, -85.051129]
-      ]
-    });
-
-    map.addLayer({
-      id: 'pixel-layer',
-      type: 'raster',
-      source: 'pixel-overlay',
-      paint: {
-        'raster-opacity': 0.8
-      }
-    });
-  }
-
   function setupEventHandlers() {
-    // Handle window resize
-    const handleResize = () => {
-      if (map) {
-        map.resize();
-        resizeCanvases();
-      }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    
-    // Pixel art painting events
-    mapContainer.addEventListener('pointermove', handlePointerMove);
-    mapContainer.addEventListener('pointerdown', handlePointerDown);
-    mapContainer.addEventListener('pointerup', handlePointerUp);
-    mapContainer.addEventListener('pointerleave', handlePointerLeave);
+    container.addEventListener('pointerdown', handlePointerDown);
+    container.addEventListener('pointermove', handlePointerMove);
+    container.addEventListener('pointerup', handlePointerUp);
+    container.addEventListener('pointerleave', handlePointerLeave);
+    container.addEventListener('wheel', handleWheel);
   }
 
-  function resizeCanvases() {
-    const containerRect = mapContainer.getBoundingClientRect();
-    const devicePixelRatio = window.devicePixelRatio || 1;
-    
-    // Resize all canvases
-    [pixelCanvas, gridCanvas, cursorCanvas].forEach(canvas => {
-      canvas.width = containerRect.width * devicePixelRatio;
-      canvas.height = containerRect.height * devicePixelRatio;
-      canvas.style.width = containerRect.width + 'px';
-      canvas.style.height = containerRect.height + 'px';
-      
-      const context = canvas.getContext('2d');
-      context.scale(devicePixelRatio, devicePixelRatio);
-      context.imageSmoothingEnabled = false; // Crisp pixels
-    });
-  }
-
-  function handleViewportChange() {
-    if (!map) return;
-    
-    try {
-      const bounds = map.getBounds();
-      const viewportBounds = {
-        north: bounds.getNorth(),
-        south: bounds.getSouth(),
-        east: bounds.getEast(),
-        west: bounds.getWest()
-      };
-      
-      // Update UI state
-      gameActions.updateViewportBounds(viewportBounds);
-      gameActions.setZoomLevel(map.getZoom());
-      
-      // Subscribe to visible tile shards (with error handling)
-      try {
-        const visibleShards = getShardsInBounds(viewportBounds, Math.floor(map.getZoom()));
-        ws.subscribeTiles(visibleShards);
-      } catch (error) {
-        console.warn('Failed to subscribe to tiles:', error);
-      }
-      
-      console.log('Viewport changed - zoom:', map.getZoom());
-      
-      // Redraw overlays for new viewport
-      redrawOverlays();
-    } catch (error) {
-      console.error('Error in viewport change handler:', error);
-    }
-  }
-
-  // Pixel art painting event handlers
   function handlePointerDown(event) {
-    if (!map || event.button !== 0) return; // Only left click
-    event.preventDefault();
-    
-    const currentUI = $uiState;
-    if (currentUI.selected_tool !== 'territory') return;
-    
-    isPainting = true;
-    const tileCoord = getPixelFromEvent(event);
-    if (tileCoord) {
-      paintPixel(tileCoord, currentUI.selected_color);
-      lastPaintedTile = `${tileCoord.lat_idx}_${tileCoord.lon_idx}`;
-    }
-  }
-  
-  function handlePointerMove(event) {
-    if (!map) return;
-    
-    const tileCoord = getPixelFromEvent(event);
-    if (!tileCoord) return;
-    
-    const tileId = `${tileCoord.lat_idx}_${tileCoord.lon_idx}`;
-    currentHoverTile = tileCoord;
-    
-    // Paint while dragging (skip if same tile to avoid redundant updates)
-    if (isPainting && $uiState.selected_tool === 'territory') {
-      if (lastPaintedTile !== tileId) {
+    if (event.button === 0) { // Left click
+      if ($uiState.selected_tool === 'territory') {
+        isPainting = true;
+        const tileCoord = screenToTile(event.offsetX, event.offsetY);
         paintPixel(tileCoord, $uiState.selected_color);
-        lastPaintedTile = tileId;
+        lastPaintedTile = tileId(tileCoord);
+      }
+    } else if (event.button === 1) { // Middle mouse
+      isPanniing = true;
+    }
+    lastPointerX = event.clientX;
+    lastPointerY = event.clientY;
+  }
+
+  function handlePointerMove(event) {
+    const tileCoord = screenToTile(event.offsetX, event.offsetY);
+    currentHoverTile = tileCoord;
+
+    if (isPanniing) {
+      const dx = event.clientX - lastPointerX;
+      const dy = event.clientY - lastPointerY;
+      panX += dx;
+      panY += dy;
+      lastPointerX = event.clientX;
+      lastPointerY = event.clientY;
+      return;
+    }
+
+    if (isPainting && $uiState.selected_tool === 'territory') {
+      const currentTileId = tileId(tileCoord);
+      if (lastPaintedTile !== currentTileId) {
+        paintPixel(tileCoord, $uiState.selected_color);
+        lastPaintedTile = currentTileId;
       }
     }
-    
-    // Update cursor preview
-    redrawCursor();
   }
-  
+
   function handlePointerUp(event) {
     isPainting = false;
+    isPanniing = false;
     lastPaintedTile = null;
   }
-  
-  function handlePointerLeave(event) {
+
+  function handlePointerLeave() {
     isPainting = false;
+    isPanniing = false;
     lastPaintedTile = null;
     currentHoverTile = null;
-    clearCursor();
   }
-  
-  function getPixelFromEvent(event) {
-    const rect = mapContainer.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
-    
-    // Convert screen coordinates to map coordinates
-    const lngLat = map.unproject([x, y]);
-    const zoom = Math.floor(map.getZoom());
-    
-    // Snap to pixel grid
-    const snapped = snapToGrid(lngLat.lat, lngLat.lng, zoom);
-    return geoToTile(snapped.lat, snapped.lng, zoom);
+
+  function handleWheel(event) {
+    event.preventDefault();
+    const scale = event.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * scale));
+
+    // Zoom towards the cursor
+    const mouseX = event.offsetX;
+    const mouseY = event.offsetY;
+
+    panX = mouseX - (mouseX - panX) * (newZoom / zoom);
+    panY = mouseY - (mouseY - panY) * (newZoom / zoom);
+    zoom = newZoom;
   }
-  
+
   function paintPixel(tileCoord, color) {
-    // Send pixel update to server
-    const tileId = `${tileCoord.lat_idx}_${tileCoord.lon_idx}`;
-    ws.sendPixelUpdate(tileId, color, 1.0);
-    
-    // Update local state immediately for responsiveness
-    gameActions.updateTile(tileId, {
-      lat_idx: tileCoord.lat_idx,
-      lon_idx: tileCoord.lon_idx,
-      type: 'territory_gray',
+    const id = tileId(tileCoord);
+    ws.sendPixelUpdate(id, color, 1.0);
+    gameActions.updateTile(id, {
+      ...tileCoord,
+      type: 'territory',
       color: color,
       opacity: 1.0
     });
   }
-  
-  function handleMapClick(event) {
-    // Fallback for non-territory tools
-    const lngLat = event.lngLat;
-    const currentUI = $uiState;
-    
-    if (currentUI.selected_tool === 'territory') return; // Handled by pointer events
-    
-    const snapped = snapToGrid(lngLat.lat, lngLat.lng, Math.floor(map.getZoom()));
-    const tileCoord = geoToTile(snapped.lat, snapped.lng, Math.floor(map.getZoom()));
-    
-    switch (currentUI.selected_tool) {
-      case 'building':
-        if (currentUI.selected_building) {
-          handleBuildingPlacement(currentUI.selected_building, tileCoord);
+
+  function screenToTile(screenX, screenY) {
+    const worldX = (screenX - panX) / zoom;
+    const worldY = (screenY - panY) / zoom;
+    const lon_idx = Math.floor(worldX / TILE_SIZE);
+    const lat_idx = Math.floor(worldY / TILE_SIZE);
+    return { lat_idx, lon_idx };
+  }
+
+  function renderFrame() {
+    clearCanvases();
+    drawPixels();
+    if (zoom > 4) {
+      drawGrid();
+    }
+    drawCursor();
+    requestAnimationFrame(renderFrame);
+  }
+
+  function clearCanvases() {
+    pixelContext.clearRect(0, 0, pixelCanvas.width, pixelCanvas.height);
+    gridContext.clearRect(0, 0, gridCanvas.width, gridCanvas.height);
+    cursorContext.clearRect(0, 0, cursorCanvas.width, cursorCanvas.height);
+  }
+
+  function drawPixels() {
+    pixelContext.save();
+    pixelContext.translate(panX, panY);
+    pixelContext.scale(zoom, zoom);
+
+    const startTile = screenToTile(0, 0);
+    const endTile = screenToTile(pixelCanvas.width, pixelCanvas.height);
+
+    for (let lat = startTile.lat_idx -1; lat <= endTile.lat_idx + 1; lat++) {
+      for (let lon = startTile.lon_idx -1; lon <= endTile.lon_idx + 1; lon++) {
+        const id = tileId({ lat_idx: lat, lon_idx: lon });
+        const tile = $worldState.tiles.get(id);
+        if (tile) {
+          pixelContext.fillStyle = tile.color;
+          pixelContext.fillRect(lon * TILE_SIZE, lat * TILE_SIZE, TILE_SIZE, TILE_SIZE);
         }
-        break;
-      case 'apx':
-        handleApxAttack(tileCoord);
-        break;
-      case 'inspect':
-        handleTileInspect(tileCoord);
-        break;
-    }
-  }
-
-  function handleRightClick(event) {
-    event.preventDefault();
-    // Right-click for quick territory erase or cancel action
-    const lngLat = event.lngLat;
-    const snapped = snapToGrid(lngLat.lat, lngLat.lng, Math.floor(map.getZoom()));
-    const tileCoord = geoToTile(snapped.lat, snapped.lng, Math.floor(map.getZoom()));
-    
-    // Quick erase with APX if available
-    handleApxAttack(tileCoord, 'point');
-  }
-
-  function handleTerritoryDraw(tiles: any[], color: string) {
-    // Send territory draw request
-    ws.sendPixelUpdate(`${tiles[0].lat_idx}_${tiles[0].lon_idx}`, color, 1.0);
-    console.log('Territory draw:', tiles, color);
-  }
-
-  function handleBuildingPlacement(buildingType: string, position: any) {
-    // Send building placement request
-    ws.sendBuildingPlacement({
-      building_type: buildingType,
-      position: position
-    });
-    console.log('Building placement:', buildingType, position);
-  }
-
-  function handleApxAttack(position: any, shape: string = 'point') {
-    console.log('APX attack:', shape, position);
-    
-    // Send APX attack request
-    ws.send({
-      type: 'apx_attack',
-      shape: shape,
-      position: position,
-      timestamp: Date.now()
-    });
-  }
-
-  function handleTileInspect(position: any) {
-    console.log('Inspect tile:', position);
-    
-    // Show tile information popup
-    const popupContent = `
-      <div class="bg-game-panel border border-gray-600 rounded-lg p-3 shadow-lg">
-        <h3 class="text-lg font-bold text-white mb-2">Tile Information</h3>
-        <div class="space-y-1 text-sm">
-          <div><span class="text-gray-400">Position:</span> ${position.lat_idx}, ${position.lon_idx}</div>
-          <div><span class="text-gray-400">Owner:</span> Unknown</div>
-          <div><span class="text-gray-400">Type:</span> Empty</div>
-        </div>
-      </div>
-    `;
-    
-    // Create and show popup
-    const popup = new Popup({ closeOnClick: true })
-      .setLngLat(map.unproject([position.lon_idx, position.lat_idx]))
-      .setHTML(popupContent)
-      .addTo(map);
-  }
-
-  // Render loop for smooth 60fps pixel updates
-  let lastRenderTime = 0;
-  let renderRequestId;
-
-  function renderFrame(currentTime: number) {
-    const deltaTime = currentTime - lastRenderTime;
-    
-    if (deltaTime >= 16) { // ~60 FPS
-      redrawOverlays();
-      lastRenderTime = currentTime;
-    }
-    
-    renderRequestId = requestAnimationFrame(renderFrame);
-  }
-
-  function startRenderLoop() {
-    renderRequestId = requestAnimationFrame(renderFrame);
-  }
-
-  function redrawOverlays() {
-    redrawPixels();
-    redrawGrid();
-    redrawCursor();
-  }
-
-  function redrawPixels() {
-    if (!pixelContext || !map) return;
-    
-    const canvas = pixelContext.canvas;
-    pixelContext.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
-    
-    // Calculate pixel size based on zoom level
-    const zoom = map.getZoom();
-    pixelSize = Math.max(2, Math.pow(2, zoom - 12)); // Exponential scaling
-    
-    // Get visible bounds
-    const bounds = map.getBounds();
-    const tileCoords = getTilesInViewport(bounds, Math.floor(zoom));
-    
-    // Draw each tile as a pixel
-    const currentWorld = $worldState;
-    
-    tileCoords.forEach(coord => {
-      const tileId = `${coord.lat_idx}_${coord.lon_idx}`;
-      const tile = currentWorld.tiles.get(tileId);
-      
-      if (tile && tile.opacity > 0) {
-        drawPixelAtTile(coord, tile.color, tile.opacity);
       }
-    });
-  }
-  
-  function getTilesInViewport(bounds, zoom) {
-    // Convert MapLibre bounds to TileBounds format
-    const tileBounds = {
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest()
-    };
-    
-    // Use the imported function from grid.ts
-    return getTilesInBounds(tileBounds, zoom);
-  }
-  
-  function drawPixelAtTile(tileCoord, color, opacity) {
-    // Convert tile coordinate to screen position
-    const geo = tileToGeo(tileCoord, Math.floor(map.getZoom()));
-    const screenPos = map.project([geo.lng, geo.lat]);
-    
-    // Draw pixel with proper size and opacity
-    pixelContext.fillStyle = color;
-    pixelContext.globalAlpha = opacity;
-    
-    const halfSize = pixelSize / 2;
-    pixelContext.fillRect(
-      screenPos.x - halfSize,
-      screenPos.y - halfSize,
-      pixelSize,
-      pixelSize
-    );
-    
-    pixelContext.globalAlpha = 1;
+    }
+    pixelContext.restore();
   }
 
-  function redrawGrid() {
-    if (!gridContext || !map) return;
-    
-    const canvas = gridContext.canvas;
-    gridContext.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
-    
-    // Show grid when enabled (for testing, lower zoom threshold)
-    const zoom = map.getZoom();
-    console.log('Grid redraw - zoom:', zoom, 'show_grid:', $uiState.show_grid);
-    
-    if (zoom < 8 || !$uiState.show_grid) return;
-    
-    // Draw pixel grid lines
-    const bounds = map.getBounds();
-    
-    // Simplified grid for debugging - draw screen grid lines
-    gridContext.strokeStyle = '#4ade80';
-    gridContext.lineWidth = 2;
-    gridContext.globalAlpha = 0.8;
-    
-    const gridSize = 50; // Fixed pixel grid for testing
-    const canvasWidth = canvas.width / window.devicePixelRatio;
-    const canvasHeight = canvas.height / window.devicePixelRatio;
-    
-    // Draw vertical lines
-    for (let x = 0; x < canvasWidth; x += gridSize) {
-      gridContext.beginPath();
-      gridContext.moveTo(x, 0);
-      gridContext.lineTo(x, canvasHeight);
-      gridContext.stroke();
+  function drawGrid() {
+    gridContext.save();
+    gridContext.translate(panX, panY);
+    gridContext.scale(zoom, zoom);
+
+    const scaledTileSize = TILE_SIZE;
+    const startX = Math.floor(-panX / (scaledTileSize * zoom)) * scaledTileSize;
+    const startY = Math.floor(-panY / (scaledTileSize * zoom)) * scaledTileSize;
+    const endX = startX + container.clientWidth / zoom;
+    const endY = startY + container.clientHeight / zoom;
+
+    gridContext.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    gridContext.lineWidth = 1 / zoom;
+
+    for (let x = startX; x < endX; x += scaledTileSize) {
+        gridContext.beginPath();
+        gridContext.moveTo(x, startY);
+        gridContext.lineTo(x, endY);
+        gridContext.stroke();
     }
-    
-    // Draw horizontal lines
-    for (let y = 0; y < canvasHeight; y += gridSize) {
-      gridContext.beginPath();
-      gridContext.moveTo(0, y);
-      gridContext.lineTo(canvasWidth, y);
-      gridContext.stroke();
+
+    for (let y = startY; y < endY; y += scaledTileSize) {
+        gridContext.beginPath();
+        gridContext.moveTo(startX, y);
+        gridContext.lineTo(endX, y);
+        gridContext.stroke();
     }
-    
-    console.log('Grid drawn with', Math.floor(canvasWidth/gridSize), 'x', Math.floor(canvasHeight/gridSize), 'cells');
+    gridContext.restore();
   }
-  
-  function redrawCursor() {
-    if (!cursorContext || !map || !currentHoverTile) return;
-    
-    const canvas = cursorContext.canvas;
-    cursorContext.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
-    
-    // Draw high-contrast cursor at hover tile
-    const geo = tileToGeo(currentHoverTile, Math.floor(map.getZoom()));
-    const screenPos = map.project([geo.lng, geo.lat]);
-    
-    const halfSize = pixelSize / 2;
-    
-    // White outline
-    cursorContext.strokeStyle = '#ffffff';
-    cursorContext.lineWidth = 3;
-    cursorContext.globalAlpha = 0.9;
-    cursorContext.strokeRect(
-      screenPos.x - halfSize - 1,
-      screenPos.y - halfSize - 1,
-      pixelSize + 2,
-      pixelSize + 2
-    );
-    
-    // Black inner line  
-    cursorContext.strokeStyle = '#000000';
-    cursorContext.lineWidth = 1;
-    cursorContext.strokeRect(
-      screenPos.x - halfSize,
-      screenPos.y - halfSize,
-      pixelSize,
-      pixelSize
-    );
-    
-    // Color preview
+
+  function drawCursor() {
+    if (!currentHoverTile) return;
+
+    cursorContext.save();
+    cursorContext.translate(panX, panY);
+    cursorContext.scale(zoom, zoom);
+
+    const x = currentHoverTile.lon_idx * TILE_SIZE;
+    const y = currentHoverTile.lat_idx * TILE_SIZE;
+
     if ($uiState.selected_tool === 'territory') {
       cursorContext.fillStyle = $uiState.selected_color;
       cursorContext.globalAlpha = 0.7;
-      cursorContext.fillRect(
-        screenPos.x - halfSize,
-        screenPos.y - halfSize,
-        pixelSize,
-        pixelSize
-      );
+      cursorContext.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+      cursorContext.globalAlpha = 1;
     }
+
+    cursorContext.strokeStyle = '#ffffff';
+    cursorContext.lineWidth = 2 / zoom;
+    cursorContext.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
     
-    cursorContext.globalAlpha = 1;
-  }
-  
-  function clearCursor() {
-    if (!cursorContext) return;
-    const canvas = cursorContext.canvas;
-    cursorContext.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
+    cursorContext.strokeStyle = '#000000';
+    cursorContext.lineWidth = 1 / zoom;
+    cursorContext.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+
+    cursorContext.restore();
   }
 
-  // WebSocket event handlers
   ws.onPixelUpdate((update) => {
-    // Handle incoming pixel updates from other players
+    // This will be handled by the store update, which triggers a rerender
     console.log('Pixel update received:', update);
-    // Redraw will happen in next render frame
   });
 
-  ws.onBuildingPlaced((data) => {
-    console.log('Building placed:', data);
-    // Update world state and redraw
-  });
-
-  onDestroy(() => {
-    if (renderRequestId) {
-      cancelAnimationFrame(renderRequestId);
-    }
-  });
 </script>
 
-<div bind:this={mapContainer} class="w-full h-full relative bg-game-bg">
-  <!-- Map loading indicator -->
-  <div class="absolute inset-0 flex items-center justify-center bg-game-bg z-20" class:hidden={mapLoaded && !mapError}>
-    <div class="text-center">
-      {#if mapError}
-        <div class="text-red-400 mb-2">⚠️</div>
-        <div class="text-sm text-red-400 mb-2">Map Failed to Load</div>
-        <div class="text-xs text-gray-500">{mapError}</div>
-        <button 
-          class="mt-3 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
-          on:click={() => { mapError = null; mapLoaded = false; initializeMap(); }}
-        >
-          Retry
-        </button>
-      {:else}
-        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-game-accent mb-2"></div>
-        <div class="text-sm text-gray-400">Loading world map...</div>
-      {/if}
-    </div>
-  </div>
-  
-  <!-- Attribution (required for OpenFreeMap) -->
-  <div class="absolute bottom-2 right-2 text-xs text-gray-500 bg-black/50 px-2 py-1 rounded">
-    © OpenFreeMap contributors
-  </div>
+<div bind:this={container} class="w-full h-full relative bg-gray-800 overflow-hidden cursor-crosshair">
+  <!-- Canvases are appended here by script -->
 </div>
-
-<style>
-  :global(.maplibregl-map) {
-    font-family: 'JetBrains Mono', monospace;
-  }
-  
-  :global(.maplibregl-popup-content) {
-    background: var(--game-panel);
-    color: #e5e7eb;
-  }
-  
-  :global(.maplibregl-ctrl-group button) {
-    background: var(--game-panel);
-    color: #e5e7eb;
-  }
-</style>

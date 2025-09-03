@@ -5,7 +5,7 @@
 ### **Core Infrastructure**
 - ✅ **SvelteKit Project**: Fully initialized with TypeScript support
 - ✅ **Production Build**: Compiles successfully (`npm run build` ✓)
-- ✅ **Development Server**: Running on http://localhost:5173 ✓  
+- ✅ **Development Server**: Running on http://37.60.229.209 ✓  
 - ✅ **API Endpoints**: `/api/leaderboard` and `/api/place` operational
 - ✅ **Docker Setup**: Multi-stage Dockerfile ready for deployment
 - ✅ **PWA Manifest**: Service worker and offline support configured
@@ -54,7 +54,7 @@ Due to TypeScript compatibility issues with Svelte 4, the full game UI has been 
 ### **Development Environment**
 ```bash
 ✅ npm install          # Dependencies installed successfully  
-✅ npm run dev           # Dev server running on localhost:5173
+✅ npm run dev           # Dev server running on 37.60.229.209
 ✅ npm run build         # Production build completes
 ✅ HTTP 200 responses    # Homepage and API endpoints working
 ```
@@ -91,13 +91,13 @@ node build
 3. **Development Mode**
 ```bash
 npm run dev
-# Access at http://localhost:5173
+# Access at http://37.60.229.209
 ```
 
 ### **Environment Variables**
 ```bash
 PUBLIC_TILE_STYLE_URL=https://tiles.openfreemap.org/styles/bright
-PUBLIC_WS_URL=ws://localhost:5173/ws
+PUBLIC_WS_URL=ws://37.60.229.209/ws
 PUBLIC_COOLDOWN_SECONDS=30
 ```
 

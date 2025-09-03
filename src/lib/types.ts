@@ -1,242 +1,117 @@
-// Core domain types for Pixel Dominion game
+// Type definitions for the game
 
-export type TileId = string; // Format: "lat_idx_lon_idx"
 export type PlayerId = string;
-export type AllianceId = string;
-export type ColorHex = string; // Format: "#RRGGBB"
+export type FactionId = string;
+export type TileId = string; // Format: "lat_idx_lon_idx"
+export type BuildingId = string;
+export type ColorHex = string; // e.g., "#RRGGBB"
 
-export interface TileCoord {
-	lat_idx: number;
-	lon_idx: number;
-}
-
-export interface GeoCoord {
-	lat: number;
-	lng: number;
-}
-
-export type TileType = 'neutral' | 'territory_gray' | 'building_color';
-
-export interface Tile {
-	lat_idx: number;
-	lon_idx: number;
-	type: TileType;
-	owner_id?: PlayerId;
-	color: ColorHex;
-	opacity: number; // [0..1]
+export interface Player {
+  id: PlayerId;
+  faction_id: FactionId;
+  resources: Resources;
+  palette: {
+    colors: Set<ColorHex>;
+  };
+  owned_territories: Set<TileId>;
+  buildings: Building[];
+  tech_level: number;
+  alliances: Set<FactionId>;
+  generation_rate: number;
+  storage_capacity: number;
+  last_tick: number;
 }
 
 export interface Resources {
-	px: number;  // Primary currency/material
-	exp: number; // Experience points for tech
-	apx: number; // Anti-pixel (eraser) resource
-}
-
-export interface PlayerPalette {
-	colors: Set<ColorHex>;
-}
-
-export interface Player {
-	id: PlayerId;
-	faction_id: string;
-	resources: Resources;
-	palette: PlayerPalette;
-	owned_territories: Set<TileId>;
-	buildings: Building[];
-	tech_level: number; // [1..5]
-	alliances: Set<AllianceId>;
-	generation_rate: number; // px per tick
-	storage_capacity: number;
-	last_tick: number;
-}
-
-export type BuildingType = 
-	// Tier 1
-	| 'Base' | 'GenPx' | 'Storage' | 'ColorFactory' | 'Science' 
-	| 'EXP_Mine' | 'PX2EXP' | 'EXP2PX' | 'AntiPxGen' | 'Board'
-	// Tier 2+
-	| 'AdvGenPx' | 'MegaStorage' | 'PigmentFactory' | 'Academy'
-	| 'CentralDepot' | 'AlchemyLab' | 'GlobalInstitute'
-	| 'CrystalExpMine' | 'AntiPxLab' | 'QuantumPxFactory'
-	| 'ColossalColorLab' | 'AbsoluteArchive' | 'ChaosTower'
-	| 'WorldFortress' | 'CentralAI' | 'TotalAntiPxGen'
-	| 'AntimatterGen';
-
-export interface BuildingSize {
-	width: number;
-	height: number;
-}
-
-export interface TickEffect {
-	px_rate?: number;
-	exp_rate?: number;
-	apx_rate?: number;
-}
-
-export interface PlaceEffect {
-	palette_colors?: number;
-}
-
-export interface PassiveEffect {
-	px_cap?: number;
-	enables_research?: boolean;
-	research_speed?: number;
-}
-
-export interface ActiveEffect {
-	convert?: string; // "10px->1exp" format
-	post_message?: boolean;
-}
-
-export interface BuildingEffects {
-	on_tick?: TickEffect;
-	on_place?: PlaceEffect;
-	passive?: PassiveEffect;
-	active?: ActiveEffect;
-}
-
-export interface BuildingPrerequisites {
-	tech_tier: number;
-	deps: BuildingType[];
-}
-
-export interface BuildingTemplate {
-	kind: BuildingType;
-	size: BuildingSize;
-	cost_px: number;
-	min_colors_required: number;
-	effects: BuildingEffects;
-	prerequisites: BuildingPrerequisites;
-}
-
-export interface Building {
-	id: string;
-	template: BuildingTemplate;
-	position: TileCoord;
-	owner_id: PlayerId;
-	placed_at: number;
-}
-
-export interface AlliancePolicies {
-	share_px: boolean;
-	defend: boolean;
-	trade_rates: Map<keyof Resources, number>;
-}
-
-export interface Alliance {
-	id: AllianceId;
-	members: Set<PlayerId>;
-	policies: AlliancePolicies;
-	created_at: number;
-}
-
-export type ApxShape = 'point' | 'line' | 'area' | 'building';
-
-export interface ApxAttack {
-	shape: ApxShape;
-	position: TileCoord;
-	size: number;
-	cost: number;
-	attacker_id: PlayerId;
-	timestamp: number;
-}
-
-export interface GameAction {
-	type: 'draw_territory' | 'place_building' | 'convert_resources' 
-		| 'apx_attack' | 'alliance_action' | 'research' | 'trade' | 'post_message';
-	player_id: PlayerId;
-	data: any;
-	timestamp: number;
+  px: number; // Pixels
+  exp: number; // Experience
+  apx: number; // Attack Pixels
 }
 
 export interface WorldState {
-	players: Map<PlayerId, Player>;
-	tiles: Map<TileId, Tile>;
-	alliances: Map<AllianceId, Alliance>;
-	buildings: Map<string, Building>;
-	victory_threshold: number;
-	last_update: number;
+  players: Map<PlayerId, Player>;
+  tiles: Map<TileId, Tile>;
+  alliances: Map<FactionId, Alliance>;
+  buildings: Map<BuildingId, Building>;
+  victory_threshold: number;
+  last_update: number;
 }
 
-// WebSocket message types
-export interface WSMessage {
-	type: 'pixel_update' | 'player_update' | 'building_placed' 
-		| 'alliance_update' | 'tick_update' | 'system_message';
-	data: any;
-	timestamp: number;
+export interface Tile {
+  lat_idx: number;
+  lon_idx: number;
+  type: 'empty' | 'territory' | 'building';
+  owner_id?: PlayerId;
+  color?: ColorHex;
+  opacity: number;
+  building_id?: BuildingId;
 }
 
-export interface PixelUpdate {
-	tile_id: TileId;
-	color: ColorHex;
-	opacity: number;
-	owner_id?: PlayerId;
+export interface TileCoord {
+  lat_idx: number;
+  lon_idx: number;
 }
 
-// UI State types
+export interface GeoCoord {
+  lat: number;
+  lng: number;
+}
+
+export interface Alliance {
+  id: FactionId;
+  name: string;
+  members: PlayerId[];
+  territory_count: number;
+}
+
+export interface Building {
+  id: BuildingId;
+  type: 'factory' | 'turret' | 'wall' | 'mine' | 'color_factory';
+  owner_id: PlayerId;
+  tile_id: TileId;
+  health: number;
+  max_health: number;
+  level: number;
+  production_rate?: number; // For factories/mines
+  attack_power?: number; // For turrets
+  defense?: number; // For walls
+}
+
 export interface UIState {
-	selected_tool: 'territory' | 'building' | 'apx' | 'inspect';
-	selected_building?: BuildingType;
-	selected_color: ColorHex;
-	zoom_level: number;
-	viewport_bounds: {
-		north: number;
-		south: number;
-		east: number;
-		west: number;
-	};
-	cooldowns: Map<string, number>;
-	show_grid: boolean;
-	show_alliances: boolean;
+  selected_tool: 'territory' | 'building' | 'apx' | 'inspect';
+  selected_color: ColorHex;
+  selected_building?: Building['type'];
+  zoom_level: number;
+  cooldowns: Map<string, number>; // Key: action type, Value: timestamp when cooldown ends
+  show_grid: boolean;
+  show_alliances: boolean;
 }
 
-export interface LeaderboardEntry {
-	player_id: PlayerId;
-	faction_name: string;
-	dominance_score: number;
-	territories_count: number;
-	buildings_count: number;
-	tech_level: number;
+export interface GameConfig {
+  SHARD_SIZE: number;
+  STARTING_PX: number;
+  BASE_GENERATION_RATE: number;
+  GENERATION_INTERVAL_MS: number;
+  DOMINANCE_THRESHOLD: number;
 }
 
-// API Response types
-export interface ApiResponse<T = any> {
-	success: boolean;
-	data?: T;
-	error?: string;
-	timestamp: number;
+export interface Colors {
+  TERRITORY_GRAY: ColorHex;
+  [key: string]: ColorHex; // Allow dynamic access to other colors
 }
 
-export interface PlaceActionRequest {
-	action: 'draw_territory' | 'place_building';
-	tiles: TileCoord[];
-	color?: ColorHex;
-	building_type?: BuildingType;
+export interface WebSocketMessage {
+  type: string;
+  payload: any;
 }
 
-export interface ConvertResourcesRequest {
-	from: keyof Resources;
-	to: keyof Resources;
-	amount: number;
+export interface PixelUpdateMessage {
+  tile_id: TileId;
+  color: ColorHex;
+  opacity: number;
 }
 
-// Validation schemas (to be used with zod)
-export interface ValidationError {
-	field: string;
-	message: string;
-}
-
-export interface RateLimitStatus {
-	remaining: number;
-	reset_at: number;
-	limit: number;
-}
-
-// Performance tracking
-export interface PerformanceMetrics {
-	fps: number;
-	render_time_ms: number;
-	update_count: number;
-	ws_latency_ms: number;
-	tiles_rendered: number;
+export interface BuildingPlacementMessage {
+  building_type: Building['type'];
+  position: TileCoord;
 }

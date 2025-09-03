@@ -1,0 +1,16 @@
+import { c as create_ssr_component, d as add_attribute } from "../../../chunks/ssr.js";
+import "maplibre-gl";
+/* empty css                          */
+import { e as escape } from "../../../chunks/escape.js";
+const css = {
+  code: ".map-container.svelte-1hormn2{width:100%;height:100vh}.status.svelte-1hormn2{position:absolute;top:10px;left:10px;background:white;padding:10px;border-radius:5px;z-index:1000;font-family:Arial, sans-serif}",
+  map: `{"version":3,"file":"+page.svelte","sources":["+page.svelte"],"sourcesContent":["<script>\\n  import { onMount } from 'svelte';\\n  import maplibregl from 'maplibre-gl';\\n  import 'maplibre-gl/dist/maplibre-gl.css';\\n\\n  let mapContainer;\\n  let status = 'Loading map...';\\n\\n  onMount(() => {\\n    if (mapContainer) {\\n      try {\\n        // Initialize MapLibre GL map with a working style\\n        const map = new maplibregl.Map({\\n          container: mapContainer,\\n          style: 'https://tiles.openfreemap.org/styles/positron', // Use a working style\\n          center: [0, 0],\\n          zoom: 2\\n        });\\n\\n        // Add navigation controls\\n        map.addControl(new maplibregl.NavigationControl(), 'top-right');\\n\\n        // Map event handlers\\n        map.on('load', () => {\\n          console.log('Map loaded successfully');\\n          status = 'Map loaded successfully!';\\n          document.getElementById('status').textContent = status;\\n        });\\n\\n        map.on('error', (e) => {\\n          console.error('Map error:', e);\\n          status = 'Error loading map: ' + e.error.message;\\n          document.getElementById('status').textContent = status;\\n        });\\n\\n        // Count tile loads\\n        let tileCount = 0;\\n        map.on('dataloading', (e) => {\\n          if (e.dataType === 'source' && e.sourceDataType === 'content') {\\n            tileCount++;\\n            status = \`Map loaded. Tiles loaded: \${tileCount}\`;\\n            document.getElementById('status').textContent = status;\\n          }\\n        });\\n      } catch (error) {\\n        console.error('Error initializing map:', error);\\n        status = 'Error initializing map: ' + error.message;\\n        document.getElementById('status').textContent = status;\\n      }\\n    }\\n  });\\n<\/script>\\n\\n<style>\\n  .map-container {\\n    width: 100%;\\n    height: 100vh;\\n  }\\n  \\n  .status {\\n    position: absolute;\\n    top: 10px;\\n    left: 10px;\\n    background: white;\\n    padding: 10px;\\n    border-radius: 5px;\\n    z-index: 1000;\\n    font-family: Arial, sans-serif;\\n  }\\n</style>\\n\\n<div class=\\"status\\" id=\\"status\\">{status}</div>\\n<div bind:this={mapContainer} class=\\"map-container\\"></div>"],"names":[],"mappings":"AAsDE,6BAAe,CACb,KAAK,CAAE,IAAI,CACX,MAAM,CAAE,KACV,CAEA,sBAAQ,CACN,QAAQ,CAAE,QAAQ,CAClB,GAAG,CAAE,IAAI,CACT,IAAI,CAAE,IAAI,CACV,UAAU,CAAE,KAAK,CACjB,OAAO,CAAE,IAAI,CACb,aAAa,CAAE,GAAG,CAClB,OAAO,CAAE,IAAI,CACb,WAAW,CAAE,KAAK,CAAC,CAAC,UACtB"}`
+};
+const Page = create_ssr_component(($$result, $$props, $$bindings, slots) => {
+  let status = "Loading map...";
+  $$result.css.add(css);
+  return `<div class="status svelte-1hormn2" id="status">${escape(status)}</div> <div class="map-container svelte-1hormn2"${add_attribute()}></div>`;
+});
+export {
+  Page as default
+};

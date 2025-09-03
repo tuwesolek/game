@@ -22,12 +22,6 @@ export const uiState: Writable<UIState> = writable({
 	selected_tool: 'territory',
 	selected_color: COLORS.TERRITORY_GRAY,
 	zoom_level: 8,
-	viewport_bounds: {
-		north: 85,
-		south: -85,
-		east: 180,
-		west: -180
-	},
 	cooldowns: new Map(),
 	show_grid: true, // Enable grid by default for pixel art editing
 	show_alliances: true
@@ -177,15 +171,11 @@ export const gameActions = {
 	},
 
 	setSelectedBuilding(buildingType: UIState['selected_building']): void {
-		uiState.update(ui => ({ 
+		uiState.update(ui => ({
 			...ui, 
 			selected_building: buildingType,
 			selected_tool: 'building'
 		}));
-	},
-
-	updateViewportBounds(bounds: UIState['viewport_bounds']): void {
-		uiState.update(ui => ({ ...ui, viewport_bounds: bounds }));
 	},
 
 	setZoomLevel(zoom: number): void {
@@ -274,4 +264,11 @@ export function getCurrentUIState(): UIState {
 if (typeof window !== 'undefined' && import.meta.env.DEV) {
 	// Auto-initialize a dev player
 	gameActions.initializePlayer('dev-player', 'development');
+}
+
+// Log state changes in dev mode
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+	player.subscribe(p => console.log('Player state updated:', p));
+	worldState.subscribe(w => console.log('World state updated:', w));
+	uiState.subscribe(ui => console.log('UI state updated:', ui));
 }

@@ -32,8 +32,8 @@ declare module '$env/static/private' {
 	export const npm_config_cache: string;
 	export const NVM_INC: string;
 	export const HISTCONTROL: string;
-	export const HOSTNAME: string;
 	export const HISTSIZE: string;
+	export const HOSTNAME: string;
 	export const NODE: string;
 	export const COLOR: string;
 	export const npm_config_local_prefix: string;
@@ -43,6 +43,7 @@ declare module '$env/static/private' {
 	export const LOGNAME: string;
 	export const XDG_SESSION_TYPE: string;
 	export const npm_config_init_module: string;
+	export const QWEN_CODE: string;
 	export const _: string;
 	export const MOTD_SHOWN: string;
 	export const HOME: string;
@@ -65,6 +66,7 @@ declare module '$env/static/private' {
 	export const npm_lifecycle_event: string;
 	export const SHLVL: string;
 	export const NVM_CD_FLAGS: string;
+	export const PAGER: string;
 	export const XDG_SESSION_ID: string;
 	export const npm_config_user_agent: string;
 	export const npm_execpath: string;
@@ -79,8 +81,8 @@ declare module '$env/static/private' {
 	export const npm_config_node_gyp: string;
 	export const DBUS_SESSION_BUS_ADDRESS: string;
 	export const npm_config_global_prefix: string;
-	export const NVM_BIN: string;
 	export const MAIL: string;
+	export const NVM_BIN: string;
 	export const SSH_TTY: string;
 	export const npm_node_execpath: string;
 	export const OLDPWD: string;
@@ -124,8 +126,8 @@ declare module '$env/dynamic/private' {
 		npm_config_cache: string;
 		NVM_INC: string;
 		HISTCONTROL: string;
-		HOSTNAME: string;
 		HISTSIZE: string;
+		HOSTNAME: string;
 		NODE: string;
 		COLOR: string;
 		npm_config_local_prefix: string;
@@ -135,6 +137,7 @@ declare module '$env/dynamic/private' {
 		LOGNAME: string;
 		XDG_SESSION_TYPE: string;
 		npm_config_init_module: string;
+		QWEN_CODE: string;
 		_: string;
 		MOTD_SHOWN: string;
 		HOME: string;
@@ -157,6 +160,7 @@ declare module '$env/dynamic/private' {
 		npm_lifecycle_event: string;
 		SHLVL: string;
 		NVM_CD_FLAGS: string;
+		PAGER: string;
 		XDG_SESSION_ID: string;
 		npm_config_user_agent: string;
 		npm_execpath: string;
@@ -171,8 +175,8 @@ declare module '$env/dynamic/private' {
 		npm_config_node_gyp: string;
 		DBUS_SESSION_BUS_ADDRESS: string;
 		npm_config_global_prefix: string;
-		NVM_BIN: string;
 		MAIL: string;
+		NVM_BIN: string;
 		SSH_TTY: string;
 		npm_node_execpath: string;
 		OLDPWD: string;
