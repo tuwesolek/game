@@ -2,7 +2,7 @@
   import '../styles/app.css';
   
   // Accept and ignore the params prop to prevent warnings
-  export let params = undefined;
+  export const params = undefined;
 </script>
 
 <main class="h-screen w-screen overflow-hidden bg-game-bg text-gray-100">
