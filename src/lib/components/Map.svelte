@@ -1,6 +1,7 @@
-<script>
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import maplibregl, { Map as MapLibre, Popup } from 'maplibre-gl';
+  import maplibregl from 'maplibre-gl';
+  const { Map: MapLibre, Popup } = maplibregl;
   import { gameMapStyle, transformRequest, mapInteractionConfig } from '$lib/map/theme.ts';
   import { uiState, gameActions, worldState } from '$lib/store.ts';
   import { geoToTile, snapToGrid, getShardsInBounds, tileToGeo, getTilesInBounds } from '$lib/map/grid.ts';
