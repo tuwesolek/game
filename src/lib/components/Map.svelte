@@ -47,10 +47,15 @@
 
   onMount(() => {
     console.log('Map component mounting...');
-    initializeMap();
-    setupPixelOverlay();
-    setupEventHandlers();
-    startRenderLoop();
+    try {
+      initializeMap();
+      setupPixelOverlay();  
+      setupEventHandlers();
+      startRenderLoop();
+    } catch (error) {
+      console.error('Error in onMount:', error);
+      mapError = 'Component initialization failed: ' + error.message;
+    }
   });
 
   onDestroy(() => {
@@ -62,7 +67,13 @@
   function initializeMap() {
     try {
       console.log('Initializing map...');
+      console.log('MapContainer:', mapContainer);
+      console.log('MapLibre available:', typeof MapLibre);
       
+      if (!mapContainer) {
+        throw new Error('Map container not found');
+      }
+
       const mapOptions = {
         container: mapContainer,
         style: gameMapStyle,
@@ -72,7 +83,9 @@
         ...mapInteractionConfig
       };
 
+      console.log('Creating MapLibre instance with options:', mapOptions);
       map = new MapLibre(mapOptions);
+      console.log('MapLibre instance created:', map);
 
       map.on('load', () => {
         console.log('Map loaded successfully');
