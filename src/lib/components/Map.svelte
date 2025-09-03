@@ -1,15 +1,31 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { Map as MapLibre } from 'maplibre-gl';
+  import maplibregl, { Map as MapLibre, Popup } from 'maplibre-gl';
   import { gameMapStyle, transformRequest, mapInteractionConfig } from '$lib/map/theme.ts';
   import { uiState, gameActions, worldState } from '$lib/store.ts';
-  import { geoToTile, snapToGrid, getShardsInBounds, tileToGeo } from '$lib/map/grid.ts';
+  import { geoToTile, snapToGrid, getShardsInBounds, tileToGeo, getTilesInBounds } from '$lib/map/grid.ts';
   import { getWebSocket } from '$lib/ws.ts';
   import 'maplibre-gl/dist/maplibre-gl.css';
 
   let mapContainer;
   let map;
-  let ws = getWebSocket();
+  let ws;
+  
+  // Initialize WebSocket with error handling
+  try {
+    ws = getWebSocket();
+  } catch (error) {
+    console.warn('WebSocket initialization failed:', error);
+    // Create a mock WebSocket object so map doesn't crash
+    ws = {
+      subscribeTiles: () => {},
+      sendPixelUpdate: () => {},
+      sendBuildingPlacement: () => {},
+      onPixelUpdate: () => () => {},
+      onBuildingPlaced: () => () => {},
+      send: () => {}
+    };
+  }
   
   // Canvas overlays for pixel-perfect rendering
   let pixelCanvas;
@@ -24,8 +40,13 @@
   let lastPaintedTile = null;
   let currentHoverTile = null;
   let pixelSize = 16; // Base pixel size that scales with zoom
+  
+  // Map loading state
+  let mapLoaded = false;
+  let mapError = null;
 
   onMount(() => {
+    console.log('Map component mounting...');
     initializeMap();
     setupPixelOverlay();
     setupEventHandlers();
@@ -39,26 +60,47 @@
   });
 
   function initializeMap() {
-    const mapOptions = {
-      container: mapContainer,
-      style: gameMapStyle,
-      center: [0, 20], // Start near equator for better world coverage
-      zoom: 8,
-      transformRequest,
-      ...mapInteractionConfig
-    };
+    try {
+      console.log('Initializing map...');
+      
+      const mapOptions = {
+        container: mapContainer,
+        style: gameMapStyle,
+        center: [0, 20], // Start near equator for better world coverage
+        zoom: 8,
+        transformRequest,
+        ...mapInteractionConfig
+      };
 
-    map = new MapLibre(mapOptions);
+      map = new MapLibre(mapOptions);
 
-    map.on('load', () => {
-      console.log('Map loaded successfully');
-      setupCanvasSource();
-    });
+      map.on('load', () => {
+        console.log('Map loaded successfully');
+        mapLoaded = true;
+        try {
+          setupCanvasSource();
+          resizeCanvases(); // Ensure canvases are properly sized
+          redrawOverlays(); // Draw initial overlays
+        } catch (error) {
+          console.error('Error setting up map overlays:', error);
+          mapError = 'Failed to setup overlays: ' + error.message;
+        }
+      });
 
-    map.on('moveend', handleViewportChange);
-    map.on('zoomend', handleViewportChange);
-    map.on('click', handleMapClick);
-    map.on('contextmenu', handleRightClick);
+      map.on('moveend', handleViewportChange);
+      map.on('zoomend', handleViewportChange);
+      map.on('click', handleMapClick);
+      map.on('contextmenu', handleRightClick);
+      
+      map.on('error', (error) => {
+        console.error('Map error:', error);
+        mapError = 'Map loading error: ' + (error.error?.message || 'Unknown error');
+      });
+      
+    } catch (error) {
+      console.error('Failed to initialize map:', error);
+      mapError = 'Initialization failed: ' + error.message;
+    }
   }
 
   function setupPixelOverlay() {
@@ -160,24 +202,34 @@
   function handleViewportChange() {
     if (!map) return;
     
-    const bounds = map.getBounds();
-    const viewportBounds = {
-      north: bounds.getNorth(),
-      south: bounds.getSouth(),
-      east: bounds.getEast(),
-      west: bounds.getWest()
-    };
-    
-    // Update UI state
-    gameActions.updateViewportBounds(viewportBounds);
-    gameActions.setZoomLevel(map.getZoom());
-    
-    // Subscribe to visible tile shards
-    const visibleShards = getShardsInBounds(viewportBounds, Math.floor(map.getZoom()));
-    ws.subscribeTiles(visibleShards);
-    
-    // Redraw overlays for new viewport
-    redrawOverlays();
+    try {
+      const bounds = map.getBounds();
+      const viewportBounds = {
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest()
+      };
+      
+      // Update UI state
+      gameActions.updateViewportBounds(viewportBounds);
+      gameActions.setZoomLevel(map.getZoom());
+      
+      // Subscribe to visible tile shards (with error handling)
+      try {
+        const visibleShards = getShardsInBounds(viewportBounds, Math.floor(map.getZoom()));
+        ws.subscribeTiles(visibleShards);
+      } catch (error) {
+        console.warn('Failed to subscribe to tiles:', error);
+      }
+      
+      console.log('Viewport changed - zoom:', map.getZoom());
+      
+      // Redraw overlays for new viewport
+      redrawOverlays();
+    } catch (error) {
+      console.error('Error in viewport change handler:', error);
+    }
   }
 
   // Pixel art painting event handlers
@@ -337,7 +389,7 @@
     `;
     
     // Create and show popup
-    const popup = new maplibregl.Popup({ closeOnClick: true })
+    const popup = new Popup({ closeOnClick: true })
       .setLngLat(map.unproject([position.lon_idx, position.lat_idx]))
       .setHTML(popupContent)
       .addTo(map);
@@ -396,16 +448,16 @@
   }
   
   function getTilesInViewport(bounds, zoom) {
-    const topLeft = geoToTile(bounds.getNorth(), bounds.getWest(), zoom);
-    const bottomRight = geoToTile(bounds.getSouth(), bounds.getEast(), zoom);
+    // Convert MapLibre bounds to TileBounds format
+    const tileBounds = {
+      north: bounds.getNorth(),
+      south: bounds.getSouth(),
+      east: bounds.getEast(),
+      west: bounds.getWest()
+    };
     
-    const tiles = [];
-    for (let lat = Math.min(topLeft.lat_idx, bottomRight.lat_idx); lat <= Math.max(topLeft.lat_idx, bottomRight.lat_idx); lat++) {
-      for (let lon = Math.min(topLeft.lon_idx, bottomRight.lon_idx); lon <= Math.max(topLeft.lon_idx, bottomRight.lon_idx); lon++) {
-        tiles.push({ lat_idx: lat, lon_idx: lon });
-      }
-    }
-    return tiles;
+    // Use the imported function from grid.ts
+    return getTilesInBounds(tileBounds, zoom);
   }
   
   function drawPixelAtTile(tileCoord, color, opacity) {
@@ -434,31 +486,41 @@
     const canvas = gridContext.canvas;
     gridContext.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
     
-    // Only show grid when close enough for pixel editing
+    // Show grid when enabled (for testing, lower zoom threshold)
     const zoom = map.getZoom();
-    if (zoom < 14 || !$uiState.show_grid) return;
+    console.log('Grid redraw - zoom:', zoom, 'show_grid:', $uiState.show_grid);
+    
+    if (zoom < 8 || !$uiState.show_grid) return;
     
     // Draw pixel grid lines
     const bounds = map.getBounds();
-    const tileCoords = getTilesInViewport(bounds, Math.floor(zoom));
     
+    // Simplified grid for debugging - draw screen grid lines
     gridContext.strokeStyle = '#4ade80';
-    gridContext.lineWidth = 1;
-    gridContext.globalAlpha = 0.6;
+    gridContext.lineWidth = 2;
+    gridContext.globalAlpha = 0.8;
     
-    // Draw grid cell for each tile
-    tileCoords.forEach(coord => {
-      const geo = tileToGeo(coord, Math.floor(zoom));
-      const screenPos = map.project([geo.lng, geo.lat]);
-      
-      const halfSize = pixelSize / 2;
-      gridContext.strokeRect(
-        screenPos.x - halfSize,
-        screenPos.y - halfSize,
-        pixelSize,
-        pixelSize
-      );
-    });
+    const gridSize = 50; // Fixed pixel grid for testing
+    const canvasWidth = canvas.width / window.devicePixelRatio;
+    const canvasHeight = canvas.height / window.devicePixelRatio;
+    
+    // Draw vertical lines
+    for (let x = 0; x < canvasWidth; x += gridSize) {
+      gridContext.beginPath();
+      gridContext.moveTo(x, 0);
+      gridContext.lineTo(x, canvasHeight);
+      gridContext.stroke();
+    }
+    
+    // Draw horizontal lines
+    for (let y = 0; y < canvasHeight; y += gridSize) {
+      gridContext.beginPath();
+      gridContext.moveTo(0, y);
+      gridContext.lineTo(canvasWidth, y);
+      gridContext.stroke();
+    }
+    
+    console.log('Grid drawn with', Math.floor(canvasWidth/gridSize), 'x', Math.floor(canvasHeight/gridSize), 'cells');
   }
   
   function redrawCursor() {
@@ -536,10 +598,22 @@
 
 <div bind:this={mapContainer} class="w-full h-full relative bg-game-bg">
   <!-- Map loading indicator -->
-  <div class="absolute inset-0 flex items-center justify-center bg-game-bg z-20" class:hidden={map}>
+  <div class="absolute inset-0 flex items-center justify-center bg-game-bg z-20" class:hidden={mapLoaded && !mapError}>
     <div class="text-center">
-      <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-game-accent mb-2"></div>
-      <div class="text-sm text-gray-400">Loading world map...</div>
+      {#if mapError}
+        <div class="text-red-400 mb-2">⚠️</div>
+        <div class="text-sm text-red-400 mb-2">Map Failed to Load</div>
+        <div class="text-xs text-gray-500">{mapError}</div>
+        <button 
+          class="mt-3 px-3 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700"
+          on:click={() => { mapError = null; mapLoaded = false; initializeMap(); }}
+        >
+          Retry
+        </button>
+      {:else}
+        <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-game-accent mb-2"></div>
+        <div class="text-sm text-gray-400">Loading world map...</div>
+      {/if}
     </div>
   </div>
   
